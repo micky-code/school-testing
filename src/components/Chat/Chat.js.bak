@@ -1,0 +1,799 @@
+import React, { useState, useEffect, useRef } from 'react';
+//import './Chat.css';
+import { chatService, assignmentService } from '../../services/api';
+import {
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  Avatar,
+  TextField,
+  Button,
+  IconButton,
+  Divider,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  ListItemSecondaryAction,
+  Badge,
+  Box,
+  Drawer,
+  AppBar,
+  Toolbar,
+  Paper,
+  InputAdornment,
+  Chip,
+  CircularProgress,
+  Menu,
+  MenuItem,
+  Tooltip,
+  Link
+} from '@mui/material';
+import SendIcon from '@mui/icons-material/Send';
+import PersonIcon from '@mui/icons-material/Person';
+import SchoolIcon from '@mui/icons-material/School';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import SearchIcon from '@mui/icons-material/Search';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import ChatIcon from '@mui/icons-material/Chat';
+import format from 'date-fns/format';
+
+// Sample data for teachers and students (in a real app, this would come from API)
+const teachers = [
+  { id: 1, name: 'San Sophar', department: 'IT', avatar: null },
+  { id: 2, name: 'Sophal', department: 'Agronomy', avatar: null },
+  { id: 3, name: 'Michael Chen', department: 'English', avatar: null },
+  { id: 4, name: 'Laura Martinez', department: 'Tourism', avatar: null },
+  { id: 5, name: 'David Wilson', department: 'Social Work', avatar: null },
+];
+
+const students = [
+  { id: 1, name: 'SR DVP', department: 'IT', avatar: null },
+  { id: 2, name: 'Chhoun Senghok', department: 'IT', avatar: null },
+  { id: 3, name: 'San Soklai', department: 'IT', avatar: null },
+  { id: 4, name: 'Ny Kimsri', department: 'Agronomy', avatar: null },
+  { id: 5, name: 'Srey Pov', department: 'Agronomy', avatar: null },
+  { id: 6, name: 'Eva White', department: 'English', avatar: null },
+  { id: 7, name: 'Frank Lee', department: 'English', avatar: null },
+  { id: 8, name: 'George Brown', department: 'Tourism', avatar: null },
+  { id: 9, name: 'Helen Garcia', department: 'Tourism', avatar: null },
+  { id: 10, name: 'Ian Clark', department: 'Social Work', avatar: null },
+];
+
+// Mock current user (in a real app, this would come from authentication)
+const currentUser = {
+  id: 1,
+  name: 'San Sophar',
+  type: 'teacher',
+  department: 'IT'
+};
+
+// Helper function in case format fails
+const formatDate = (date, formatString) => {
+  try {
+    return format(date, formatString);
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return new Date(date).toLocaleDateString();
+  }
+};
+
+// Message status constants
+const MESSAGE_STATUS = {
+  SENT: 'sent',
+  DELIVERED: 'delivered',
+  READ: 'read'
+};
+
+const Chat = () => {
+  // State for UI elements and data
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [assignments, setAssignments] = useState([]);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null);
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [attachmentMenuAnchor, setAttachmentMenuAnchor] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [messageStatuses, setMessageStatuses] = useState({});
+  const [messageText, setMessageText] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState(null);
+  
+  // References
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const wsRef = useRef(null);
+  const messageInputRef = useRef(null);
+  
+  // Mock current user - replace with actual authentication in production
+  const currentUser = { id: 1, name: 'San Sophar', role: 'teacher', avatar: null };
+
+  // Handle WebSocket connections for real-time features
+  useEffect(() => {
+    const wsConnection = chatService.connectWebSocket();
+    wsRef.current = wsConnection;
+    
+    wsConnection.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      switch (data.type) {
+        case 'presence':
+          setOnlineUsers(new Set(data.onlineUsers));
+          break;
+        case 'message_status':
+          setMessageStatuses(prev => ({
+            ...prev,
+            [data.messageId]: data.status
+          }));
+          break;
+        case 'new_message':
+          setMessages(prev => [...prev, data.message]);
+          break;
+        default:
+          break;
+      }
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  // Handle file upload
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadedFile = await chatService.uploadFile(formData);
+      
+      // Send file message
+      const fileMessage = {
+        type: 'file',
+        content: {
+          name: file.name,
+          url: uploadedFile.url,
+          size: file.size,
+          type: file.type
+        }
+      };
+      
+      await handleSendMessage(fileMessage, 'file');
+    } catch (error) {
+      console.error('Failed to upload file:', error);
+    }
+  };
+
+  // Filter conversations by department
+  const handleDepartmentFilter = (department) => {
+    setSelectedDepartment(department);
+    setFilterAnchorEl(null);
+  };
+
+  // Filter conversations based on department and search
+  const getFilteredConversations = () => {
+    return conversations.filter(conv => 
+      (selectedDepartment === 'all' || conv.department === selectedDepartment) &&
+      (searchQuery === '' || conv.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+  };
+
+  useEffect(() => {
+    const loadAssignments = async () => {
+      try {
+        const data = await assignmentService.getAll();
+        setAssignments(data);
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const assignmentId = urlParams.get('assignment_id');
+        
+        if (assignmentId) {
+          const assignment = data.find(a => a.id === parseInt(assignmentId));
+          if (assignment) {
+            setSelectedAssignment(assignment);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load assignments:', error);
+      }
+    };
+    
+    loadAssignments();
+  }, []);
+
+  // Generate conversations based on the user type
+  useEffect(() => {
+    let contacts = [];
+    
+    if (currentUser.type === 'teacher') {
+      // Teachers see students
+      contacts = students
+        .filter(student => student.department === currentUser.department)
+        .map(student => ({
+          id: student.id,
+          name: student.name,
+          type: 'student',
+          avatar: student.avatar,
+          unreadCount: 0
+        }));
+    } else {
+      // Students see teachers
+      contacts = teachers
+        .filter(teacher => teacher.department === currentUser.department)
+        .map(teacher => ({
+          id: teacher.id,
+          name: teacher.name,
+          type: 'teacher',
+          avatar: teacher.avatar,
+          unreadCount: 0
+        }));
+    }
+    
+    setConversations(contacts);
+    
+    // Load unread counts for each conversation
+    contacts.forEach(contact => {
+      loadUnreadCount(contact.id, contact.type);
+    });
+  }, []);
+
+  // Load unread message count for a conversation
+  const loadUnreadCount = async (contactId, contactType) => {
+    try {
+      const result = await chatService.getUnreadCount(
+        currentUser.id,
+        currentUser.type
+      );
+      
+      setConversations(prevConversations => 
+        prevConversations.map(conv => 
+          conv.id === contactId && conv.type === contactType
+            ? { ...conv, unreadCount: result.unread_count }
+            : conv
+        )
+      );
+    } catch (error) {
+      console.error('Failed to load unread count:', error);
+    }
+  };
+
+  // Load messages for a conversation
+  const loadMessages = async (conversation) => {
+    try {
+      setLoading(true);
+      setSelectedConversation(conversation);
+      
+      let params = {};
+      
+      if (selectedAssignment) {
+        // If an assignment is selected, only show messages related to that assignment
+        params = {
+          assignment_id: selectedAssignment.id
+        };
+      } else {
+        // Otherwise show all messages between these users
+        params = {
+          sender_id: currentUser.id,
+          sender_type: currentUser.type,
+          receiver_id: conversation.id,
+          receiver_type: conversation.type
+        };
+      }
+      
+      const messages = await chatService.getMessages(params);
+      setMessages(messages);
+      
+      // Mark messages as read
+      await chatService.markAsRead({
+        receiver_id: currentUser.id,
+        receiver_type: currentUser.type,
+        sender_id: conversation.id,
+        sender_type: conversation.type
+      });
+      
+      // Update unread count
+      loadUnreadCount(conversation.id, conversation.type);
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Scroll to bottom of messages
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  // Handle selecting an assignment
+  const handleSelectAssignment = (assignment) => {
+    setSelectedAssignment(assignment);
+    setDrawerOpen(false);
+  };
+
+  // Check if a user is online
+  const isUserOnline = (userId) => {
+    return onlineUsers.has(userId);
+  };
+
+  // Handle file selection
+  const handleFileSelect = (event) => {
+    const files = Array.from(event.target.files);
+    setSelectedFiles(files);
+    
+    // Automatically send files if selected
+    files.forEach(file => {
+      handleFileUpload(file);
+    });
+  };
+
+  // Handle sending a message
+  // Send message function that's used throughout the component
+  const sendMessage = async (messageData) => {
+    try {
+      const sentMessage = await chatService.sendMessage(messageData);
+      
+      // Update local messages immediately
+      setMessages(prev => [...prev, {
+        ...messageData,
+        id: sentMessage.id,
+        sender_id: currentUser.id,
+        status: 'sent'
+      }]);
+      
+      return sentMessage;
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+
+  const handleSendMessage = async (messageContent = messageText, type = 'text') => {
+    if ((!messageContent.trim() && type === 'text') || !selectedConversation) return;
+
+    try {
+      const messageData = {
+        content: messageContent,
+        type,
+        receiver_id: selectedConversation.id,
+        receiver_type: selectedConversation.type,
+        assignment_id: selectedAssignment?.id,
+        timestamp: new Date().toISOString()
+      };
+
+      const sentMessage = await sendMessage(messageData);
+      setMessageText('');
+
+      // Notify through WebSocket
+      if (wsRef.current) {
+        wsRef.current.send(JSON.stringify({
+          type: 'message_sent',
+          messageId: sentMessage.id,
+          receiverId: selectedConversation.id
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+
+  // Handle UI actions
+  const handleAttachmentClick = (event) => {
+    setAttachmentMenuAnchor(event.currentTarget);
+  };
+
+  const handleAttachmentMenuClose = () => {
+    setAttachmentMenuAnchor(null);
+  };
+
+  const handleFileSelect = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+    handleAttachmentMenuClose();
+  };
+
+  // Function to render the conversation list with improved styling
+  const renderConversationList = () => {
+    return (
+      <List sx={{ flexGrow: 1, overflow: 'auto', p: 0 }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+            <CircularProgress size={30} />
+          </Box>
+        ) : getFilteredConversations().length === 0 ? (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="body2" color="textSecondary">
+              {searchQuery
+                ? "No conversations match your search"
+                : selectedDepartment !== 'all'
+                  ? `No conversations in ${selectedDepartment}`
+                  : "No conversations available"}
+            </Typography>
+          </Box>
+        ) : (
+          getFilteredConversations().map(conversation => {
+            const isSelected = selectedConversation?.id === conversation.id;
+            const isOnline = isUserOnline(conversation.id);
+            return (
+              <ListItem
+                button
+                key={conversation.id}
+                onClick={() => handleSelectConversation(conversation)}
+                selected={isSelected}
+                sx={{
+                  borderLeft: isSelected ? '3px solid #1976d2' : '3px solid transparent',
+                  bgcolor: isSelected ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                }}
+              >
+                <ListItemAvatar>
+                  <Badge
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    badgeContent={
+                      isOnline && (
+                        <Box
+                          sx={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            bgcolor: '#4caf50',
+                            border: '2px solid white'
+                          }}
+                        />
+                      )
+                    }
+                  >
+                    <Avatar sx={{ bgcolor: conversation.type === 'teacher' ? '#1976d2' : '#9c27b0' }}>
+                      {conversation.type === 'teacher' ? <PersonIcon /> : <SchoolIcon />}
+                    </Avatar>
+                  </Badge>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={conversation.name}
+                  secondary={conversation.department}
+                />
+              </ListItem>
+            );
+          })
+        )}
+      </List>
+    );
+  };
+          </Tooltip>
+          
+          <IconButton
+            edge="end"
+            color="inherit"
+            onClick={() => setDrawerOpen(true)}
+          >
+            <AssignmentIcon />
+          </IconButton>
+        </Toolbar>
+      </AppBar>
+
+      <Menu
+        anchorEl={filterAnchorEl}
+        open={Boolean(filterAnchorEl)}
+        onClose={() => setFilterAnchorEl(null)}
+      >
+        <MenuItem onClick={() => handleDepartmentFilter('all')}>
+          All Departments
+        </MenuItem>
+        {Array.from(new Set(teachers.map(t => t.department))).map(dept => (
+          <MenuItem key={dept} onClick={() => handleDepartmentFilter(dept)}>
+            {dept}
+          </MenuItem>
+        ))}
+      </Menu>
+
+      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+        <Grid container spacing={0} sx={{ height: '100%' }}>
+          {/* Conversations List */}
+          <Grid item xs={12} md={4} sx={{ borderRight: 1, borderColor: 'divider', height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ p: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  )
+                }}
+              />
+            </Box>
+            <List sx={{ overflow: 'auto', maxHeight: 'calc(100vh - 180px)', flexGrow: 1 }}>
+              {filteredConversations.map(conversation => (
+                <ListItem
+                  button
+                  key={conversation.id}
+                  onClick={() => loadMessages(conversation)}
+                  selected={selectedConversation?.id === conversation.id}
+                  sx={{
+                    '&.Mui-selected': {
+                      backgroundColor: 'action.selected'
+                    }
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Badge
+                      color="primary"
+                      variant="dot"
+                      invisible={!isUserOnline(conversation.id)}
+                      overlap="circular"
+                      anchorOrigin={{
+                        vertical: 'bottom',
+                        horizontal: 'right'
+                      }}
+                    >
+                      <Avatar>
+                        {conversation.type === 'teacher' ? <SchoolIcon /> : <PersonIcon />}
+                      </Avatar>
+                    </Badge>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="subtitle1">{conversation.name}</Typography>
+                        <Chip
+                          size="small"
+                          label={conversation.department}
+                          sx={{ height: 20 }}
+                        />
+                      </Box>
+                    }
+                    secondary={conversation.lastMessage?.content || 'No messages yet'}
+                  />
+                  {conversation.unreadCount > 0 && (
+                    <ListItemSecondaryAction>
+                      <Badge
+                        badgeContent={conversation.unreadCount}
+                        color="primary"
+                        sx={{ mr: 1 }}
+                      />
+                    </ListItemSecondaryAction>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+
+          {/* Messages */}
+          <Grid item xs={12} md={8} sx={{ height: '100%' }}>
+            {selectedConversation ? (
+              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2
+                  }}
+                >
+                  <IconButton onClick={() => setSelectedConversation(null)}>
+                    <ArrowBackIcon />
+                  </IconButton>
+                  
+                  <Avatar>
+                    {selectedConversation.type === 'teacher' ? <SchoolIcon /> : <PersonIcon />}
+                  </Avatar>
+                  
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="subtitle1">
+                      {selectedConversation.name}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {selectedConversation.department}
+                    </Typography>
+                  </Box>
+                  
+                  {selectedAssignment && (
+                    <Chip
+                      icon={<AssignmentIcon />}
+                      label={selectedAssignment.title}
+                      onDelete={() => setSelectedAssignment(null)}
+                      color="primary"
+                      variant="outlined"
+                    />
+                  )}
+                </Box>
+
+                <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
+                  {messages.map(message => (
+                    <Box
+                      key={message.id}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: message.sender_id === currentUser.id ? 'flex-end' : 'flex-start',
+                        mb: 1
+                      }}
+                    >
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 1,
+                          backgroundColor: message.sender_id === currentUser.id ? 'primary.main' : 'grey.100',
+                          color: message.sender_id === currentUser.id ? 'white' : 'inherit',
+                          maxWidth: '70%'
+                        }}
+                      >
+                        {message.type === 'file' ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <AttachFileIcon />
+                            <Link 
+                              href={message.content.url} 
+                              target="_blank" 
+                              rel="noopener"
+                              sx={{ color: 'inherit' }}
+                            >
+                              {message.content.name}
+                            </Link>
+                          </Box>
+                        ) : (
+                          <Typography variant="body1">{message.content}</Typography>
+                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                          <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                            {format(new Date(message.timestamp), 'h:mm a')}
+                          </Typography>
+                          {message.sender_id === currentUser.id && (
+                            <DoneAllIcon 
+                              sx={{ 
+                                fontSize: 16,
+                                color: messageStatuses[message.id] === MESSAGE_STATUS.READ ? 'inherit' : 'action.disabled'
+                              }} 
+                            />
+                          )}
+                        </Box>
+                      </Paper>
+                    </Box>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </Box>
+
+                <Box sx={{ p: 2, display: 'flex', gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    placeholder="Type a message..."
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    multiline
+                    maxRows={4}
+                    size="small"
+                  />
+                  
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    onChange={handleFileSelect}
+                    multiple
+                  />
+                  
+                  <IconButton
+                    color="primary"
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    <AttachFileIcon />
+                  </IconButton>
+                  
+                  <IconButton
+                    color="primary"
+                    onClick={handleSendMessage}
+                    disabled={!messageText.trim() && !selectedFiles.length}
+                  >
+                    <SendIcon />
+                  </IconButton>
+                </Box>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  p: 3,
+                  bgcolor: 'background.default'
+                }}
+              >
+                <ChatIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                <Typography variant="h6" color="textSecondary" gutterBottom>
+                  Select a conversation to start chatting
+                </Typography>
+              </Box>
+            )}
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* Assignments Drawer */}
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        sx={{ width: 320 }}
+      >
+        <Box sx={{ width: 320, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AppBar position="static" color="default" elevation={1}>
+            <Toolbar>
+              <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                Select Assignment
+              </Typography>
+              <IconButton onClick={() => setDrawerOpen(false)}>
+                <CloseIcon />
+              </IconButton>
+            </Toolbar>
+          </AppBar>
+          <Divider />
+          <List sx={{ flexGrow: 1, overflow: 'auto' }}>
+            {assignments.length === 0 ? (
+              <Box sx={{ p: 2, textAlign: 'center' }}>
+                <Typography variant="body2" color="textSecondary">
+                  No assignments available
+                </Typography>
+              </Box>
+            ) : (
+              assignments.map((assignment) => (
+                <ListItem
+                  button
+                  key={assignment.id}
+                  onClick={() => handleSelectAssignment(assignment)}
+                  selected={selectedAssignment?.id === assignment.id}
+                >
+                  <ListItemAvatar>
+                    <Avatar>
+                      <AssignmentIcon />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={assignment.title}
+                    secondary={`Due: ${formatDate(
+                      new Date(assignment.due_date),
+                      'MMM d, yyyy'
+                    )}`}
+                  />
+                </ListItem>
+              ))
+            )}
+          </List>
+        </Box>
+      </Drawer>
+    </Box>
+  );
+};
+
+export default Chat;

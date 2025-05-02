@@ -1,0 +1,35 @@
+.exam-container {
+  padding: 20px;
+  background-color: #f9fafb;
+  min-height: calc(100vh - 70px);
+}
+
+.exam-content {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-top: 20px;
+}
+
+.coming-soon {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #f0f7ff;
+  border-radius: 8px;
+  border-left: 4px solid #3f51b5;
+}
+
+.coming-soon h3 {
+  color: #3f51b5;
+  margin-bottom: 15px;
+}
+
+.coming-soon ul {
+  padding-left: 20px;
+}
+
+.coming-soon li {
+  margin-bottom: 8px;
+  color: #555;
+}

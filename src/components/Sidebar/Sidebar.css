@@ -1,0 +1,123 @@
+.sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background-color: #0a8e52;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.sidebar.collapsed {
+  width: 70px;
+}
+
+.logo-container {
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.toggle-btn {
+  position: absolute;
+  right: -12px;
+  top: 20px;
+  width: 24px;
+  height: 24px;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #0b693f;
+  font-weight: bold;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed .toggle-btn {
+  transform: rotate(180deg);
+}
+
+.logo {
+  width: 100%;
+  height: 55px;
+  border-radius: 9px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: -15px;
+  background-color: #fff;
+  padding: 5px;
+}
+
+.logo-img {
+  width: 95%;
+  height: 98%;
+  object-fit: contain;
+  display: block;
+}
+
+.nav-menu {
+  padding: 10px 0;
+}
+
+.nav-menu ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.nav-menu li {
+  padding: 10px 15px;
+  margin: 5px 0;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.nav-menu li a {
+  color: white;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.nav-icon {
+  font-size: 18px;
+  min-width: 30px;
+  display: inline-block;
+  text-align: center;
+  margin-right: 10px;
+}
+
+.nav-text {
+  transition: opacity 0.2s;
+}
+
+.sidebar.collapsed .nav-text {
+  opacity: 0;
+  width: 0;
+  visibility: hidden;
+}
+
+.nav-menu li.active {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-left: 3px solid white;
+}
+
+.nav-menu li:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
