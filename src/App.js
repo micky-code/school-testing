@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import './App.css';
 import Sidebar from './components/Sidebar/Sidebar';
 import Header from './components/Header/Header';
@@ -25,10 +26,10 @@ const Settings = () => {
 };
 
 const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = localStorage.getItem('user') !== null;
+  const { user } = useAuth();
   const location = useLocation();
   
-  if (!isAuthenticated) {
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
@@ -37,22 +38,6 @@ const ProtectedRoute = ({ children }) => {
 
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  // Check authentication status on initial load and when localStorage changes
-  useEffect(() => {
-    const checkAuth = () => {
-      const user = localStorage.getItem('user');
-      setIsAuthenticated(user !== null);
-    };
-    
-    // Check immediately
-    checkAuth();
-    
-    // Listen for storage events (like when logging out from another tab)
-    window.addEventListener('storage', checkAuth);
-    return () => window.removeEventListener('storage', checkAuth);
-  }, []);
 
   const toggleSidebar = () => {
     const newState = !sidebarCollapsed;
@@ -61,43 +46,44 @@ function App() {
   };
 
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          {/* Public route - login page */}
-          <Route path="/login" element={<Auth setIsAuthenticated={setIsAuthenticated} />} />
-          
-          {/* Protected routes */}
-          <Route path="*" element={
-            isAuthenticated ? (
-              <>
-                <Sidebar isCollapsed={sidebarCollapsed} toggleSidebar={toggleSidebar} />
-                <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-                  <Header />
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/students" element={<Students />} />
-                    <Route path="/teachers" element={<Teachers />} />
-                    <Route path="/courses" element={<Courses />} />
-                    <Route path="/assignments" element={<Assignments />} />
-                    <Route path="/chat" element={<Chat />} />
-                    <Route path="/attendance" element={<Attendance />} />
-                    <Route path="/exam" element={<Exam />} />
-                    <Route path="/account" element={<Account />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                  </Routes>
-                </div>
-              </>
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          } />
-        </Routes>
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div className="App">
+          <Routes>
+            <Route path="/login" element={<Auth />} />
+            
+            <Route
+              path="*"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Sidebar isCollapsed={sidebarCollapsed} toggleSidebar={toggleSidebar} />
+                    <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+                      <Header />
+                      <Routes>
+                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/students" element={<Students />} />
+                        <Route path="/teachers" element={<Teachers />} />
+                        <Route path="/courses" element={<Courses />} />
+                        <Route path="/assignments" element={<Assignments />} />
+                        <Route path="/chat" element={<Chat />} />
+                        <Route path="/attendance" element={<Attendance />} />
+                        <Route path="/exam" element={<Exam />} />
+                        <Route path="/account" element={<Account />} />
+                        <Route path="/profile" element={<Profile />} />
+                        <Route path="/settings" element={<Settings />} />
+                        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                      </Routes>
+                    </div>
+                  </>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 
