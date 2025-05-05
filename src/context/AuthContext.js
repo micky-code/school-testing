@@ -10,12 +10,22 @@ export const AuthProvider = ({ children }) => {
     // Check for stored user data on component mount
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const userData = JSON.parse(storedUser);
+      // Verify token is still valid here if needed
+      setUser(userData);
     }
     setLoading(false);
   }, []);
 
   const login = (userData) => {
+    if (!userData.token) {
+      throw new Error('No authentication token provided');
+    }
+    // Set the token in localStorage and axios headers
+    localStorage.setItem('token', userData.token);
+    if (window.axios) {
+      window.axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+    }
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
   };
@@ -23,6 +33,10 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    if (window.axios) {
+      delete window.axios.defaults.headers.common['Authorization'];
+    }
   };
 
   if (loading) {
@@ -30,7 +44,12 @@ export const AuthProvider = ({ children }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ 
+      user,
+      login, 
+      logout,
+      isAuthenticated: !!user?.isAuthenticated
+    }}>
       {children}
     </AuthContext.Provider>
   );

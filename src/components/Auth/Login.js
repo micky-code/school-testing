@@ -194,20 +194,36 @@ const Login = () => {
     }
   }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
+    setErrors({});
+
+    // Validate form
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      // API call logic would go here
-      // For now, simulating successful login
-      const userData = {
-        username: formData.username,
-        // Add other user data as needed
-      };
-      login(userData); // Store user data in context
-      navigate('/dashboard');
+      const response = await authService.login(formData);
+      if (response.data) {
+        const userData = {
+          id: response.data.id,
+          username: response.data.username,
+          role: response.data.role,
+          token: response.data.token,
+          isAuthenticated: true
+        };
+        login(userData); // Store user data in context
+        navigate('/dashboard');
+      } else {
+        setError('Invalid response from server');
+      }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Invalid credentials');
+      setError(error.response?.data?.message || 'Invalid credentials');
     } finally {
       setIsSubmitting(false);
     }
